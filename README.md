@@ -1,65 +1,84 @@
-# ♚ MWM Chess
+# ♟ MWM Chess (Android)
 
 A clean, beginner-friendly chess game for Android. Free, open source, and made
-for people who are still learning the game. Tap a piece and it shows you exactly
-where it can move.
+for people who are still learning the game: pick up a piece and it shows you
+exactly where it can move. Play the computer at four strengths or a friend on
+the same phone. No ads, no tracking, no network, everything runs on-device.
 
-> Free / non-commercial / open source. Built for learning, not for profit.
+![MWM Chess — the board, showing legal moves for the picked-up knight](docs/screenshot.png)
+
+*The Green theme: the knight on f3 is selected, so its legal moves are marked
+with dots and the capturable pawn on e5 gets a ring; the last move (…a6) stays
+highlighted, with the move list and controls below. (Preview rendered from the
+app's real piece set and board colours.)*
+
+## 📲 Download
+
+**[⬇ Latest APK (release)](https://github.com/Matswm86/mwm-chess/releases/latest/download/mwm-chess.apk)**
+
+Sideload it: open the APK on your phone and allow *install from unknown
+sources* when prompted. Android 8.0+ (minSdk 26).
+
+Alternatively, every push builds a fresh debug APK in CI: *Actions → Build APK →
+artifact `mwm-chess-debug`* (requires a GitHub login to download artifacts).
 
 ## Features
 
 - **Full, correct chess rules** — legal moves only, castling, en passant, pawn
-  promotion (choose your piece), check, checkmate, stalemate, plus draws by
-  the 50-move rule, threefold repetition, and insufficient material.
+  promotion (you pick the piece), check, checkmate, stalemate, plus draws by the
+  50-move rule, threefold repetition, and insufficient material.
 - **Play the computer** at four strengths: **Easy → Medium → Hard → Expert.**
-  The engine uses negamax + alpha-beta with quiescence search and iterative
-  deepening; Easy occasionally plays a loose move so beginners can win, Expert
-  searches deep and does not.
-- **Two-player pass-and-play** on one device.
-- **See every legal move.** Pick up a piece and the squares it can go to are
-  marked with a dot; pieces you can capture get a ring.
-- **Beginner touches:** last-move highlight, red glow when your king is in
-  check, captured-piece tray with a material lead badge, a coordinate (a–h /
-  1–8) toggle, undo, board flip, and four board themes (Green, Wood, Blue,
-  Slate).
-- **Handsome, no-nonsense look:** the classic **Cburnett** vector piece set
-  (the pieces Lichess and Wikipedia use) on authentic tournament board colours.
-  Light and dark mode.
+  Easy sometimes plays a loose move so beginners can win; Expert searches deep
+  and doesn't. Or play **two-player pass-and-play** on one device.
+- **See every legal move** — tap a piece: empty squares it can reach get a dot,
+  pieces it can take get a ring.
+- **A hint button** — asks the engine for the best move for your side and
+  highlights it in blue.
+- **Beginner touches** — last-move highlight, a red glow when your king is in
+  check, a captured-piece tray with a material-lead badge, a move-history strip
+  in algebraic notation, coordinate (a–h / 1–8) toggle, undo, and board flip.
+- **Sound effects** for moves, captures, castling, promotion, check and
+  game-over, with a one-tap mute.
+- **Handsome, no-nonsense look** — the classic **Cburnett** vector piece set
+  (the pieces Lichess and Wikipedia use) on authentic tournament board colours,
+  four themes (Green, Wood, Blue, Slate), and light/dark mode.
 
 ## Screens
 
-- **Menu** — choose mode, difficulty, and which colour you play.
-- **Game** — the board, both players' captured material, the current status,
-  and Undo / Flip / coordinate controls.
+- **Menu** — choose mode (vs computer / two players), difficulty, and which
+  colour you play.
+- **Game** — the board, both players' captured material with a lead badge, the
+  current status ("White to move", "Checkmate…"), the move list, and the
+  Hint / Undo / Flip / coordinates / sound controls.
 
-## Build / install
+## The engine
 
-Android APKs are built in the cloud by **GitHub Actions** — you don't need
-Android Studio.
+A pure-Kotlin engine: **negamax + alpha-beta** with **quiescence search** and
+**iterative deepening**, ordered by MVV-LVA, with a material + piece-square-table
+evaluation. Difficulty scales the search depth and time budget (Easy also has a
+small blunder chance); the AI runs off the UI thread so the board never freezes.
 
-1. Push to `main` (or open the **Actions** tab and run **Build APK**).
-2. When the run finishes, open it and download the **`mwm-chess-debug`**
-   artifact. It contains `app-debug.apk`.
-3. Copy the APK to your phone and open it. You may need to allow
-   "install from unknown sources" for your file manager or browser.
+## Tech
 
-### Building locally (optional)
+Kotlin + Jetpack Compose (Material 3), single Activity, `minSdk 26`. Rules and
+move generation live in `app/src/main/java/no/mwm/chess/engine/`, the search in
+`…/engine/ai/`, and the Compose UI in `…/ui/`. Pieces are Android vector
+drawables; the board and highlights are drawn with plain Compose `Canvas`. No
+game or chart libraries.
 
-Requires JDK 17 and the Android SDK.
+## Build locally
+
+APKs are normally built in the cloud by **GitHub Actions** (see
+`.github/workflows/android-build.yml`), so you don't need Android Studio. To
+build on your own machine you need JDK 17 and the Android SDK:
 
 ```bash
 gradle wrapper --gradle-version 8.7   # first time only, generates ./gradlew
 ./gradlew assembleDebug               # APK at app/build/outputs/apk/debug/
 ```
 
-## Tech
-
-- Kotlin + Jetpack Compose (Material 3), single Activity, `minSdk 26`.
-- Pure-Kotlin chess engine in `app/src/main/java/no/mwm/chess/engine/`
-  (rules + move generation) and `.../engine/ai/` (the search).
-- No ads, no tracking, no network. Everything runs on-device.
-
 ## License
 
-**GPL-3.0-or-later.** See [`LICENSE`](LICENSE). The Cburnett piece art is used
-under GPLv2+ with attribution — see [`NOTICE.md`](NOTICE.md).
+**GPL-3.0-or-later** — see [`LICENSE`](LICENSE). The Cburnett piece art is used
+under GPLv2+ with attribution to Colin M.L. Burnett — see [`NOTICE.md`](NOTICE.md).
+Free and open source, made for learning rather than profit.
