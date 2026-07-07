@@ -1,9 +1,10 @@
 package no.mwm.chess.ui
 
+import android.app.Application
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -13,7 +14,9 @@ import no.mwm.chess.engine.Color
 import no.mwm.chess.engine.GameRules
 import no.mwm.chess.engine.GameStatus
 import no.mwm.chess.engine.Move
+import no.mwm.chess.engine.MoveFlag
 import no.mwm.chess.engine.MoveGen
+import no.mwm.chess.engine.Notation
 import no.mwm.chess.engine.PieceType
 import no.mwm.chess.engine.StatusType
 import no.mwm.chess.engine.ai.Difficulty
@@ -23,9 +26,10 @@ import kotlin.random.Random
 enum class GameMode { VS_AI, TWO_PLAYER }
 enum class ColorChoice { WHITE, BLACK, RANDOM }
 
-class ChessViewModel : ViewModel() {
+class ChessViewModel(app: Application) : AndroidViewModel(app) {
 
     private val engine = SearchEngine()
+    private val sound = SoundManager(app)
 
     var inMenu by mutableStateOf(true)
         private set
@@ -41,6 +45,8 @@ class ChessViewModel : ViewModel() {
         private set
     var showCoordinates by mutableStateOf(true)
         private set
+    var soundOn by mutableStateOf(true)
+        private set
     var boardThemeIndex by mutableStateOf(0)
         private set
 
@@ -54,9 +60,17 @@ class ChessViewModel : ViewModel() {
         private set
     var thinking by mutableStateOf(false)
         private set
+    var hinting by mutableStateOf(false)
+        private set
     var pendingPromotion by mutableStateOf<Pair<Int, Int>?>(null)
         private set
     var checkSquare by mutableStateOf<Int?>(null)
+        private set
+    var hintFrom by mutableStateOf<Int?>(null)
+        private set
+    var hintTo by mutableStateOf<Int?>(null)
+        private set
+    var moveSans by mutableStateOf<List<String>>(emptyList())
         private set
 
     private var selectedMoves: List<Move> = emptyList()
@@ -73,22 +87,27 @@ class ChessViewModel : ViewModel() {
         board = Board.initial()
         flipped = mode == GameMode.VS_AI && humanColor == Color.BLACK
         clearSelection()
+        clearHint()
         lastMove = null
+        moveSans = emptyList()
         historyBoards.clear()
         inMenu = false
         thinking = false
+        hinting = false
         refreshStatus()
         maybeTriggerAI()
     }
 
     fun backToMenu() {
         thinking = false
+        hinting = false
         inMenu = true
     }
 
     fun onSquareTap(sq: Int) {
-        if (inMenu || thinking || pendingPromotion != null || status.isOver) return
+        if (inMenu || thinking || hinting || pendingPromotion != null || status.isOver) return
         if (mode == GameMode.VS_AI && board.sideToMove != humanColor) return
+        clearHint()
 
         val piece = board.squares[sq]
         val sel = selected
@@ -120,15 +139,36 @@ class ChessViewModel : ViewModel() {
         clearSelection()
     }
 
+    fun requestHint() {
+        if (inMenu || thinking || hinting || pendingPromotion != null || status.isOver) return
+        if (mode == GameMode.VS_AI && board.sideToMove != humanColor) return
+        hinting = true
+        val snapshot = board.clone()
+        viewModelScope.launch {
+            val mv = withContext(Dispatchers.Default) { engine.chooseMove(snapshot, Difficulty.HARD) }
+            hinting = false
+            if (!inMenu && mv != null && !status.isOver &&
+                (mode != GameMode.VS_AI || board.sideToMove == humanColor)
+            ) {
+                select(mv.from)
+                hintFrom = mv.from
+                hintTo = mv.to
+            }
+        }
+    }
+
     fun undo() {
-        if (thinking || inMenu || historyBoards.isEmpty()) return
-        board = historyBoards.removeAt(historyBoards.lastIndex)
+        if (thinking || hinting || inMenu || historyBoards.isEmpty()) return
+        var popped = 0
+        board = historyBoards.removeAt(historyBoards.lastIndex); popped++
         if (mode == GameMode.VS_AI && historyBoards.isNotEmpty() &&
             board.sideToMove != humanColor
         ) {
-            board = historyBoards.removeAt(historyBoards.lastIndex)
+            board = historyBoards.removeAt(historyBoards.lastIndex); popped++
         }
+        if (moveSans.size >= popped) moveSans = moveSans.dropLast(popped)
         lastMove = null
+        clearHint()
         clearSelection()
         refreshStatus()
     }
@@ -139,6 +179,10 @@ class ChessViewModel : ViewModel() {
 
     fun toggleCoordinates() {
         showCoordinates = !showCoordinates
+    }
+
+    fun toggleSound() {
+        soundOn = !soundOn
     }
 
     fun cycleBoardTheme() {
@@ -157,15 +201,45 @@ class ChessViewModel : ViewModel() {
         legalTargets = emptySet()
     }
 
+    private fun clearHint() {
+        hintFrom = null
+        hintTo = null
+    }
+
     private fun applyMove(move: Move) {
-        historyBoards.add(board)
-        val next = board.clone()
+        clearHint()
+        val before = board
+        val capturing = before.squares[move.to] != null || move.flag == MoveFlag.EN_PASSANT
+        val castling = move.flag == MoveFlag.CASTLE_KING || move.flag == MoveFlag.CASTLE_QUEEN
+        val promoting = move.promotion != null
+
+        historyBoards.add(before)
+        val next = before.clone()
         next.makeMove(move)
         board = next
         lastMove = move
         clearSelection()
         refreshStatus()
+
+        val mate = status.type == StatusType.CHECKMATE
+        val check = status.type == StatusType.CHECK
+        moveSans = moveSans + Notation.san(before, move, check, mate)
+
+        playSound(promoting, castling, capturing)
         maybeTriggerAI()
+    }
+
+    private fun playSound(promoting: Boolean, castling: Boolean, capturing: Boolean) {
+        if (!soundOn) return
+        val event = when {
+            status.isOver -> SoundEvent.GAMEOVER
+            status.type == StatusType.CHECK -> SoundEvent.CHECK
+            promoting -> SoundEvent.PROMOTE
+            castling -> SoundEvent.CASTLE
+            capturing -> SoundEvent.CAPTURE
+            else -> SoundEvent.MOVE
+        }
+        sound.play(event)
     }
 
     private fun maybeTriggerAI() {
@@ -193,5 +267,10 @@ class ChessViewModel : ViewModel() {
             StatusType.CHECK, StatusType.CHECKMATE -> board.kingSquare(board.sideToMove)
             else -> null
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        sound.release()
     }
 }

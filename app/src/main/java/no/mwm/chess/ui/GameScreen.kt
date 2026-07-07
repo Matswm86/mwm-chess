@@ -13,13 +13,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +68,9 @@ fun GameScreen(vm: ChessViewModel) {
 
         Spacer(Modifier.height(10.dp))
         StatusLine(vm)
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
+        MoveStrip(vm)
+        Spacer(Modifier.height(8.dp))
         Controls(vm)
     }
 
@@ -162,16 +170,76 @@ private fun StatusLine(vm: ChessViewModel) {
     )
 }
 
+private data class MoveToken(val text: String, val isNumber: Boolean)
+
+private fun buildMoveTokens(sans: List<String>): List<MoveToken> {
+    val tokens = ArrayList<MoveToken>(sans.size + sans.size / 2)
+    sans.forEachIndexed { i, san ->
+        if (i % 2 == 0) tokens.add(MoveToken("${i / 2 + 1}.", true))
+        tokens.add(MoveToken(san, false))
+    }
+    return tokens
+}
+
+@Composable
+private fun MoveStrip(vm: ChessViewModel) {
+    val tokens = remember(vm.moveSans) { buildMoveTokens(vm.moveSans) }
+    val listState = rememberLazyListState()
+    LaunchedEffect(tokens.size) {
+        if (tokens.isNotEmpty()) listState.animateScrollToItem(tokens.size - 1)
+    }
+    LazyRow(
+        state = listState,
+        modifier = Modifier.fillMaxWidth().height(26.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (tokens.isEmpty()) {
+            item {
+                Text(
+                    "No moves yet",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        items(tokens.size) { i ->
+            val t = tokens[i]
+            Text(
+                t.text,
+                fontSize = 13.sp,
+                fontWeight = if (t.isNumber) FontWeight.Normal else FontWeight.SemiBold,
+                color = if (t.isNumber) MaterialTheme.colorScheme.onSurfaceVariant
+                else MaterialTheme.colorScheme.onBackground,
+            )
+        }
+    }
+}
+
+private fun hintEnabled(vm: ChessViewModel): Boolean =
+    !vm.hinting && !vm.thinking && !vm.status.isOver &&
+        (vm.mode != GameMode.VS_AI || vm.board.sideToMove == vm.humanColor)
+
 @Composable
 private fun Controls(vm: ChessViewModel) {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        OutlinedButton(onClick = { vm.undo() }, modifier = Modifier.weight(1f)) { Text("Undo") }
-        OutlinedButton(onClick = { vm.flipBoard() }, modifier = Modifier.weight(1f)) { Text("Flip") }
-        OutlinedButton(onClick = { vm.toggleCoordinates() }, modifier = Modifier.weight(1f)) {
-            Text(if (vm.showCoordinates) "Hide a–h" else "Show a–h")
+    Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                onClick = { vm.requestHint() },
+                enabled = hintEnabled(vm),
+                modifier = Modifier.weight(1f),
+            ) { Text(if (vm.hinting) "Thinking…" else "Hint") }
+            OutlinedButton(onClick = { vm.undo() }, modifier = Modifier.weight(1f)) { Text("Undo") }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { vm.flipBoard() }, modifier = Modifier.weight(1f)) { Text("Flip") }
+            OutlinedButton(onClick = { vm.toggleCoordinates() }, modifier = Modifier.weight(1f)) {
+                Text(if (vm.showCoordinates) "a–h ✓" else "a–h")
+            }
+            OutlinedButton(onClick = { vm.toggleSound() }, modifier = Modifier.weight(1f)) {
+                Text(if (vm.soundOn) "Sound ✓" else "Muted")
+            }
         }
     }
 }

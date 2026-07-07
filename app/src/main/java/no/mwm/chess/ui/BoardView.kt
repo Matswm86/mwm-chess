@@ -82,6 +82,9 @@ private fun SquareCell(
         if (lm != null && (lm.from == sq || lm.to == sq)) {
             Box(Modifier.fillMaxSize().background(Highlights.lastMove))
         }
+        if (vm.hintFrom == sq || vm.hintTo == sq) {
+            Box(Modifier.fillMaxSize().background(Highlights.hint))
+        }
         if (vm.selected == sq) {
             Box(Modifier.fillMaxSize().background(Highlights.selected))
         }

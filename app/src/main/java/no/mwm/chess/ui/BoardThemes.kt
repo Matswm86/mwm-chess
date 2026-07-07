@@ -21,6 +21,7 @@ object Highlights {
     val captureRing = Color(0x59145500)   // rgba(20,85,0,~0.35) — capturable piece
     val checkInner = Color(0xE6E53935)     // red glow centre behind a checked king
     val checkOuter = Color(0x00E53935)     // fades to transparent
+    val hint = Color(0x8029B6F6)           // blue wash on a suggested move (from + to)
     val coordOnLight = Color(0x99000000)
     val coordOnDark = Color(0x99FFFFFF)
 }
