@@ -79,8 +79,8 @@ object BoardGeo {
  * back-rank pieces are not hidden behind the front rank. Tap-picking (see [handleTap])
  * derives its ray from these exact values, so keep the three in lock-step.
  */
-private const val CAM_HEIGHT = 30f
-private const val CAM_DIST = 20f
+private const val CAM_HEIGHT = 32f
+private const val CAM_DIST = 18f
 private val CAM_TARGET = Position(0f, -0.5f, 0f)
 private val WORLD_UP = Position(0f, 1f, 0f)
 
@@ -92,12 +92,18 @@ private val WORLD_UP = Position(0f, 1f, 0f)
  */
 private const val PIECE_SCALE = 1.3f
 
-/** Flat discs laid on the board to signal state. Material colour is fixed per kind. */
+/**
+ * Flat discs laid on the board to signal state. Colours are deliberately translucent and
+ * de-saturated (alpha in the high byte) so they tint the square rather than glare over it;
+ * legal-move dots are green for clear contrast against the wood, capture/check are a muted
+ * red. The materials are painted matte (see [Chess3DController.load]) so the strong fill
+ * lights don't turn them into bright specular spots.
+ */
 private enum class Marker(val color: ComposeColor, val radius: Float) {
-    SELECT(ComposeColor(0xFFF5CF67), 0.92f),
-    MOVE(ComposeColor(0xFFE6C86A), 0.30f),
-    CAPTURE(ComposeColor(0xFFCE4A3C), 0.94f),
-    CHECK(ComposeColor(0xFFD8493D), 0.94f),
+    SELECT(ComposeColor(0x73D9B45C), 0.92f),
+    MOVE(ComposeColor(0xB32E9068), 0.34f),
+    CAPTURE(ComposeColor(0x8FC0473A), 0.94f),
+    CHECK(ComposeColor(0xA6C43A30), 0.94f),
 }
 
 /**
@@ -139,7 +145,7 @@ private class Chess3DController(
                     radius = kind.radius,
                     height = 0.06f,
                     materialInstance = materialLoader.createColorInstance(
-                        color = kind.color, metallic = 0f, roughness = 0.55f, reflectance = 0.2f,
+                        color = kind.color, metallic = 0f, roughness = 0.9f, reflectance = 0f,
                     ),
                 ).apply { isVisible = false }
             }
