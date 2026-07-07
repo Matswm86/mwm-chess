@@ -27,6 +27,8 @@ import io.github.sceneview.rememberMainLightNode
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberNodes
+import dev.romainguy.kotlin.math.cross
+import dev.romainguy.kotlin.math.normalize
 import no.mwm.chess.engine.Color
 import no.mwm.chess.engine.Piece
 import no.mwm.chess.engine.PieceType
@@ -70,6 +72,17 @@ object BoardGeo {
         return Position(startX + index * step, 0f, z)
     }
 }
+
+/**
+ * Fixed 3/4 camera. Raised high and pulled well back so the whole board plus both
+ * captured line-ups fit on a tall phone screen, with a steep-enough tilt that the
+ * back-rank pieces are not hidden behind the front rank. Tap-picking (see [handleTap])
+ * derives its ray from these exact values, so keep the three in lock-step.
+ */
+private const val CAM_HEIGHT = 32f
+private const val CAM_DIST = 21f
+private val CAM_TARGET = Position(0f, -0.5f, 0f)
+private val WORLD_UP = Position(0f, 1f, 0f)
 
 /** Flat discs laid on the board to signal state. Material colour is fixed per kind. */
 private enum class Marker(val color: ComposeColor, val radius: Float) {
@@ -154,9 +167,9 @@ private class Chess3DController(
     }
 
     fun placeCamera(camera: CameraNode, flipped: Boolean) {
-        val z = if (flipped) -17.5f else 17.5f
-        camera.position = Position(0f, 18.5f, z)
-        camera.lookAt(Position(0f, 0f, if (flipped) 0.5f else -0.5f))
+        val z = if (flipped) -CAM_DIST else CAM_DIST
+        camera.position = Position(0f, CAM_HEIGHT, z)
+        camera.lookAt(CAM_TARGET)
     }
 
     fun sync(vm: ChessViewModel) {
@@ -231,15 +244,36 @@ private class Chess3DController(
         return out
     }
 
+    /**
+     * Map a screen tap to a board square by casting a ray through the tapped pixel and
+     * intersecting the playing-surface plane. The ray is built by hand from the camera's
+     * live pose and projection rather than the deprecated `screenPointToRay`, which
+     * returned a bad ray on-device (nothing was ever pickable). tanH/tanV come straight
+     * off the projection-matrix diagonal, so picking always matches whatever the renderer
+     * actually drew (any FOV/aspect); the eye + basis reconstruct the exact camera frame
+     * that [placeCamera]'s `lookAt` produced.
+     */
     fun handleTap(camera: CameraNode, x: Float, y: Float, vm: ChessViewModel) {
-        val ray = camera.screenPointToRay(x, y)
-        val o = ray.origin
-        val d = ray.direction
-        if (abs(d.y) < 1e-5f) return
-        val t = (BoardGeo.surfaceY - o.y) / d.y
+        val vp = camera.viewport ?: return
+        if (vp.width <= 0 || vp.height <= 0) return
+        val proj = camera.projectionTransform
+        val m00 = proj.x.x // 1 / tan(horizontalHalfFov), aspect-baked, transpose-safe
+        val m11 = proj.y.y // 1 / tan(verticalHalfFov)
+        if (abs(m00) < 1e-6f || abs(m11) < 1e-6f) return
+
+        val ndcX = x / vp.width * 2f - 1f
+        val ndcY = 1f - y / vp.height * 2f
+        val eye = camera.worldPosition
+        val forward = normalize(CAM_TARGET - eye)
+        val right = normalize(cross(forward, WORLD_UP))
+        val up = cross(right, forward)
+        val dir = right * (ndcX / m00) + up * (ndcY / m11) + forward
+
+        if (abs(dir.y) < 1e-5f) return
+        val t = (BoardGeo.surfaceY - eye.y) / dir.y
         if (t <= 0f) return
-        val wx = o.x + d.x * t
-        val wz = o.z + d.z * t
+        val wx = eye.x + dir.x * t
+        val wz = eye.z + dir.z * t
         val file = BoardGeo.nearestFile(wx) ?: return
         val rank = BoardGeo.nearestRank(wz) ?: return
         vm.onSquareTap(squareOf(file, rank))
@@ -255,8 +289,8 @@ fun Board3DView(vm: ChessViewModel, modifier: Modifier = Modifier) {
     val cameraNode = rememberCameraNode(engine) {
         near = 0.5f
         far = 300f
-        position = Position(0f, 18.5f, 17.5f)
-        lookAt(Position(0f, 0f, -0.5f))
+        position = Position(0f, CAM_HEIGHT, CAM_DIST)
+        lookAt(CAM_TARGET)
     }
     val keyLight = rememberMainLightNode(engine)
     // fill lights so no face of a piece renders fully black (no IBL is bundled).
