@@ -9,3 +9,6 @@
 .cxx
 local.properties
 app/build/
+
+# Design working files (reference, not built)
+_design_new/

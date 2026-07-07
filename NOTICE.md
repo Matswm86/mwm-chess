@@ -1,23 +1,39 @@
 # Third-party attributions
 
-## Chess piece artwork — "Cburnett"
+## 3D chess set — "Chess set" by brendan wood
 
-The vector chess pieces in `app/src/main/res/drawable/piece_*.xml` are derived
-from the **Cburnett** SVG chess set by **Colin M.L. Burnett**, as distributed by
-the Lichess project (`lichess-org/lila`, `public/piece/cburnett/`).
+The real-time 3D board and pieces (`app/src/main/assets/models/*.glb`) are
+derived from **"Chess set"** by **brendan wood**, obtained from Sketchfab. The
+original single-scene model was split into one static board and twelve
+per-piece models (recentred and instanced) for use in the app; the geometry is
+otherwise unchanged.
 
-- Original author: Colin M.L. Burnett
-- Source: https://github.com/lichess-org/lila/tree/master/public/piece/cburnett
-- Also on Wikimedia Commons (originally CC BY-SA 3.0 / GFDL 1.2, additionally
-  offered under GPL by the author).
-- Used here under the **GNU General Public License v2 or later**, which is
-  compatible with this project's GPL-3.0 license.
+- Author: brendan wood — https://sketchfab.com/brendanwood872
+- Source: https://sketchfab.com/3d-models/chess-set-a2664ea4fcaa4a64ad077667d9d0c7fb
+- License: **CC-BY-4.0** — http://creativecommons.org/licenses/by/4.0/
 
-The SVGs were mechanically converted to Android VectorDrawable XML; the path
-geometry is unchanged.
+> This work is based on "Chess set"
+> (https://sketchfab.com/3d-models/chess-set-a2664ea4fcaa4a64ad077667d9d0c7fb)
+> by brendan wood (https://sketchfab.com/brendanwood872) licensed under CC-BY-4.0
+> (http://creativecommons.org/licenses/by/4.0/)
+
+## Typeface — Cinzel
+
+UI text is set in **Cinzel** (`app/src/main/res/font/cinzel_variable.ttf`).
+
+- Author: The Cinzel Project Authors — https://github.com/NDISCOVER/Cinzel
+- License: **SIL Open Font License 1.1** — https://scripts.sil.org/OFL
+
+## 3D rendering — SceneView / Filament
+
+The board is rendered with **SceneView** (`io.github.sceneview:sceneview`),
+which is built on Google's **Filament** engine. Both are licensed under the
+**Apache License 2.0**.
+
+- SceneView: https://github.com/SceneView/sceneview-android
+- Filament: https://github.com/google/filament
 
 ## Colour values
 
-Board and move-highlight colours reference the open-source Lichess
-(`lichess-org/chessground`, `lila`) and the widely documented Chess.com board
-palette. Colours are facts/values, not copyrightable assets.
+Board and move-highlight colours reference open-source palettes. Colours are
+facts/values, not copyrightable assets.
