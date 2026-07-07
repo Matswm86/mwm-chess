@@ -43,11 +43,7 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var flipped by mutableStateOf(false)
         private set
-    var showCoordinates by mutableStateOf(true)
-        private set
     var soundOn by mutableStateOf(true)
-        private set
-    var boardThemeIndex by mutableStateOf(0)
         private set
 
     var selected by mutableStateOf<Int?>(null)
@@ -72,9 +68,17 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var moveSans by mutableStateOf<List<String>>(emptyList())
         private set
+    var resigned by mutableStateOf(false)
+        private set
 
     private var selectedMoves: List<Move> = emptyList()
     private val historyBoards = ArrayList<Board>()
+
+    /** True once the game has ended by rule or by resignation. */
+    val isGameOver: Boolean get() = status.isOver || resigned
+
+    /** Whether there is a move to take back. */
+    val canUndo: Boolean get() = historyBoards.isNotEmpty()
 
     fun startGame(mode: GameMode, difficulty: Difficulty, colorChoice: ColorChoice) {
         this.mode = mode
@@ -94,8 +98,19 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
         inMenu = false
         thinking = false
         hinting = false
+        resigned = false
         refreshStatus()
         maybeTriggerAI()
+    }
+
+    /** Human concedes the game. */
+    fun resign() {
+        if (isGameOver) return
+        thinking = false
+        hinting = false
+        clearSelection()
+        clearHint()
+        resigned = true
     }
 
     fun backToMenu() {
@@ -105,7 +120,7 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onSquareTap(sq: Int) {
-        if (inMenu || thinking || hinting || pendingPromotion != null || status.isOver) return
+        if (inMenu || thinking || hinting || pendingPromotion != null || isGameOver) return
         if (mode == GameMode.VS_AI && board.sideToMove != humanColor) return
         clearHint()
 
@@ -140,14 +155,14 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun requestHint() {
-        if (inMenu || thinking || hinting || pendingPromotion != null || status.isOver) return
+        if (inMenu || thinking || hinting || pendingPromotion != null || isGameOver) return
         if (mode == GameMode.VS_AI && board.sideToMove != humanColor) return
         hinting = true
         val snapshot = board.clone()
         viewModelScope.launch {
             val mv = withContext(Dispatchers.Default) { engine.chooseMove(snapshot, Difficulty.HARD) }
             hinting = false
-            if (!inMenu && mv != null && !status.isOver &&
+            if (!inMenu && mv != null && !isGameOver &&
                 (mode != GameMode.VS_AI || board.sideToMove == humanColor)
             ) {
                 select(mv.from)
@@ -158,7 +173,9 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun undo() {
-        if (thinking || hinting || inMenu || historyBoards.isEmpty()) return
+        if (thinking || hinting || inMenu) return
+        if (resigned) { resigned = false; return }
+        if (historyBoards.isEmpty()) return
         var popped = 0
         board = historyBoards.removeAt(historyBoards.lastIndex); popped++
         if (mode == GameMode.VS_AI && historyBoards.isNotEmpty() &&
@@ -177,16 +194,13 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
         flipped = !flipped
     }
 
-    fun toggleCoordinates() {
-        showCoordinates = !showCoordinates
+    /** Change the computer's strength mid-game; takes effect on its next move. */
+    fun setDifficulty(d: Difficulty) {
+        difficulty = d
     }
 
     fun toggleSound() {
         soundOn = !soundOn
-    }
-
-    fun cycleBoardTheme() {
-        boardThemeIndex = (boardThemeIndex + 1) % BoardThemes.all.size
     }
 
     private fun select(sq: Int) {
@@ -243,7 +257,7 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun maybeTriggerAI() {
-        if (status.isOver) return
+        if (isGameOver) return
         if (mode != GameMode.VS_AI || board.sideToMove == humanColor) return
         thinking = true
         val snapshot = board.clone()
@@ -251,7 +265,7 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val mv = withContext(Dispatchers.Default) { engine.chooseMove(snapshot, diff) }
             thinking = false
-            if (!inMenu && mv != null && !status.isOver &&
+            if (!inMenu && mv != null && !isGameOver &&
                 board.sideToMove != humanColor
             ) {
                 applyMove(mv)

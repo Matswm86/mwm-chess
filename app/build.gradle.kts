@@ -39,6 +39,10 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
     }
+    androidResources {
+        // Filament reads .glb from assets as a whole buffer; keep them uncompressed.
+        noCompress += "glb"
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -63,4 +67,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Real-time 3D board (Filament renderer). 2.2.1 pins kotlin-stdlib 1.9.24 +
+    // Compose foundation 1.6.7, matching this module's toolchain exactly.
+    implementation("io.github.sceneview:sceneview:2.2.1")
 }
