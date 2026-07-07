@@ -79,10 +79,18 @@ object BoardGeo {
  * back-rank pieces are not hidden behind the front rank. Tap-picking (see [handleTap])
  * derives its ray from these exact values, so keep the three in lock-step.
  */
-private const val CAM_HEIGHT = 32f
-private const val CAM_DIST = 21f
+private const val CAM_HEIGHT = 30f
+private const val CAM_DIST = 20f
 private val CAM_TARGET = Position(0f, -0.5f, 0f)
 private val WORLD_UP = Position(0f, 1f, 0f)
+
+/**
+ * On-board pieces are drawn 1.3x their native size so they read clearly from the
+ * pulled-back camera. Safe against neighbours: the widest piece pair that can ever be
+ * adjacent in a legal position (king+queen ~1.46 avg footprint) stays under the 2.0
+ * square pitch at this scale; only two adjacent kings would touch, which is illegal.
+ */
+private const val PIECE_SCALE = 1.3f
 
 /** Flat discs laid on the board to signal state. Material colour is fixed per kind. */
 private enum class Marker(val color: ComposeColor, val radius: Float) {
@@ -190,7 +198,7 @@ private class Chess3DController(
         for (sq in 0..63) {
             val p = vm.board.squares[sq] ?: continue
             val node = nextPiece(keyOf(p)) ?: continue
-            node.scale = Scale(1f, 1f, 1f)
+            node.scale = Scale(PIECE_SCALE, PIECE_SCALE, PIECE_SCALE)
             node.position = BoardGeo.position(sq)
             node.isVisible = true
         }
