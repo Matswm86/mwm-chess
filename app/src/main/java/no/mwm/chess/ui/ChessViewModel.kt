@@ -195,7 +195,7 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Change the computer's strength mid-game; takes effect on its next move. */
-    fun setDifficulty(d: Difficulty) {
+    fun changeDifficulty(d: Difficulty) {
         difficulty = d
     }
 

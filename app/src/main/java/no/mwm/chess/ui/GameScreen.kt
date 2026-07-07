@@ -251,7 +251,7 @@ private fun SettingsPopover(vm: ChessViewModel, onDismiss: () -> Unit) {
                 SettingRow(
                     label = d.label,
                     active = d == vm.difficulty,
-                    onClick = { vm.setDifficulty(d) },
+                    onClick = { vm.changeDifficulty(d) },
                 )
             }
             PanelHeader("BOARD")
