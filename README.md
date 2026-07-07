@@ -1,16 +1,16 @@
 # ♟ MWM Chess (Android)
 
-A clean, beginner-friendly chess game for Android. Free, open source, and made
-for people who are still learning the game: pick up a piece and it shows you
-exactly where it can move. Play the computer at four strengths or a friend on
-the same phone. No ads, no tracking, no network, everything runs on-device.
+A clean, beginner-friendly chess game for Android, now on a **real-time 3D
+board**. Free, open source, and made for people who are still learning the game:
+pick up a piece and it shows you exactly where it can move. Play the computer at
+four strengths or a friend on the same phone. No ads, no tracking, no network,
+everything runs on-device.
 
-![MWM Chess — the board, showing legal moves for the picked-up knight](docs/screenshot.png)
+![MWM Chess — the royal-wood board design](docs/screenshot.png)
 
-*The Green theme: the knight on f3 is selected, so its legal moves are marked
-with dots and the capturable pawn on e5 gets a ring; the last move (…a6) stays
-highlighted, with the move list and controls below. (Preview rendered from the
-app's real piece set and board colours.)*
+*The new "royal wood & gold" design: a carved-wood set on a gilt board. Tap a
+piece and its legal squares light up; captured pieces are lifted off the board
+and lined up beside it. (Design preview; a device capture will replace this.)*
 
 ## 📲 Download
 
@@ -24,32 +24,35 @@ artifact `mwm-chess-debug`* (requires a GitHub login to download artifacts).
 
 ## Features
 
+- **A real 3D board** — the pieces are a carved-wood glTF set rendered in real
+  time with Google's Filament engine, on a gilt-framed board, viewed from a
+  comfortable playing angle.
+- **Captures leave the board** — a taken piece is removed from its square and
+  lined up beside the board on the side of the player who captured it, so you
+  can read the material balance at a glance.
 - **Full, correct chess rules** — legal moves only, castling, en passant, pawn
   promotion (you pick the piece), check, checkmate, stalemate, plus draws by the
   50-move rule, threefold repetition, and insufficient material.
 - **Play the computer** at four strengths: **Easy → Medium → Hard → Expert.**
   Easy sometimes plays a loose move so beginners can win; Expert searches deep
   and doesn't. Or play **two-player pass-and-play** on one device.
-- **See every legal move** — tap a piece: empty squares it can reach get a dot,
-  pieces it can take get a ring.
-- **A hint button** — asks the engine for the best move for your side and
-  highlights it in blue.
-- **Beginner touches** — last-move highlight, a red glow when your king is in
-  check, a captured-piece tray with a material-lead badge, a move-history strip
-  in algebraic notation, coordinate (a–h / 1–8) toggle, undo, and board flip.
-- **Sound effects** for moves, captures, castling, promotion, check and
-  game-over, with a one-tap mute.
-- **Handsome, no-nonsense look** — the classic **Cburnett** vector piece set
-  (the pieces Lichess and Wikipedia use) on authentic tournament board colours,
-  four themes (Green, Wood, Blue, Slate), and light/dark mode.
+- **See every legal move** — tap a piece: reachable empty squares get a marker,
+  pieces you can take get a ring, and your king glows red when it's in check.
+- **A hint button** — asks the engine for the best move for your side.
+- **Extras** — undo, resign, restart, change the computer's strength mid-game,
+  a promotion picker, and sound effects for moves, captures, castling,
+  promotion, check and game-over with a one-tap mute.
+- **A "royal wood & gold" look** — set in the Cinzel typeface on a dark-green
+  felt table, top to bottom.
 
 ## Screens
 
 - **Menu** — choose mode (vs computer / two players), difficulty, and which
   colour you play.
-- **Game** — the board, both players' captured material with a lead badge, the
-  current status ("White to move", "Checkmate…"), the move list, and the
-  Hint / Undo / Flip / coordinates / sound controls.
+- **Game** — the 3D board, a top bar with the current level and difficulty, a
+  turn/status line with a material-lead badge, and an Undo / Hint / Restart /
+  Resign bar. A settings gear changes difficulty, flips the board, toggles
+  sound, or returns to the menu.
 
 ## The engine
 
@@ -60,11 +63,13 @@ small blunder chance); the AI runs off the UI thread so the board never freezes.
 
 ## Tech
 
-Kotlin + Jetpack Compose (Material 3), single Activity, `minSdk 26`. Rules and
-move generation live in `app/src/main/java/no/mwm/chess/engine/`, the search in
-`…/engine/ai/`, and the Compose UI in `…/ui/`. Pieces are Android vector
-drawables; the board and highlights are drawn with plain Compose `Canvas`. No
-game or chart libraries.
+Kotlin + Jetpack Compose (Material 3), single Activity, `minSdk 26`. The board is
+rendered by **SceneView** (Google **Filament**); the source chess set is split
+into a static board plus twelve instanced piece models under
+`app/src/main/assets/models/`, placed and driven from the same game state as the
+UI. Rules and move generation live in
+`app/src/main/java/no/mwm/chess/engine/`, the search in `…/engine/ai/`, and the
+Compose UI + 3D board in `…/ui/`. No game or chart libraries.
 
 ## Build locally
 
@@ -79,6 +84,8 @@ gradle wrapper --gradle-version 8.7   # first time only, generates ./gradlew
 
 ## License
 
-**GPL-3.0-or-later** — see [`LICENSE`](LICENSE). The Cburnett piece art is used
-under GPLv2+ with attribution to Colin M.L. Burnett — see [`NOTICE.md`](NOTICE.md).
-Free and open source, made for learning rather than profit.
+**GPL-3.0-or-later** — see [`LICENSE`](LICENSE). The 3D chess set is
+"Chess set" by brendan wood, used under **CC-BY-4.0**; UI text is set in
+**Cinzel** (SIL Open Font License); 3D rendering uses **SceneView / Filament**
+(Apache-2.0). Full attributions in [`NOTICE.md`](NOTICE.md). Free and open
+source, made for learning rather than profit.
