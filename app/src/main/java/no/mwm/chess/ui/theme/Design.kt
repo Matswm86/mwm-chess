@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontVariation
@@ -67,6 +68,7 @@ object Design {
 }
 
 /** Cinzel (OFL) is a variable font; expose the weights the design uses. */
+@OptIn(ExperimentalTextApi::class)
 val Cinzel = FontFamily(
     Font(R.font.cinzel_variable, FontWeight.Normal,
         variationSettings = FontVariation.Settings(FontVariation.weight(400))),
