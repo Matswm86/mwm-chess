@@ -67,6 +67,12 @@ fun GameScreen(vm: ChessViewModel) {
         }
     }
 
+    // The game code gets the whole screen; the board appears only after Continue.
+    if (vm.mode == GameMode.ONLINE && vm.codeCardOpen && !vm.isGameOver) {
+        CodeCard(vm)
+        return
+    }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -89,8 +95,6 @@ fun GameScreen(vm: ChessViewModel) {
         if (vm.pendingPromotion != null) PromotionSheet(vm)
         if (vm.isGameOver) {
             GameOverOverlay(vm)
-        } else if (vm.mode == GameMode.ONLINE && vm.codeCardOpen) {
-            CodeCard(vm)
         }
         if (confirmLeave) {
             LeaveDialog(
@@ -277,7 +281,7 @@ private fun CodeCard(vm: ChessViewModel) {
     val waiting = vm.onlinePhase == OnlinePhase.WAITING
     val side = if (vm.humanColor == Color.WHITE) "White" else "Black"
     Box(
-        Modifier.fillMaxSize().background(Design.scrim),
+        Modifier.fillMaxSize().background(Design.background).systemBarsPadding(),
         contentAlignment = Alignment.Center,
     ) {
         Column(
