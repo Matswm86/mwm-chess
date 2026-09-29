@@ -51,7 +51,7 @@ jobs:
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk mwm-chess.apk
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest mwm-chess.apk --prerelease --title "Latest build (rolling)" \
+          gh release create latest mwm-chess.apk --target "${GITHUB_SHA}" --prerelease --title "Latest build (rolling)" \
             --notes "Debug APK built from main at ${GITHUB_SHA}. Sideload: download mwm-chess.apk, open it, allow installs from this source."
         env:
           GH_TOKEN: ${{ github.token }}
