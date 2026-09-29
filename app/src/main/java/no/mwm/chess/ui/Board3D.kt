@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color as ComposeColor
@@ -15,6 +16,7 @@ import io.github.sceneview.Scene
 import io.github.sceneview.loaders.MaterialLoader
 import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Scale
 import io.github.sceneview.node.CameraNode
 import io.github.sceneview.node.CylinderNode
@@ -35,7 +37,11 @@ import no.mwm.chess.engine.PieceType
 import no.mwm.chess.engine.fileOf
 import no.mwm.chess.engine.rankOf
 import no.mwm.chess.engine.squareOf
+import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.sin
 
 /**
  * Board geometry, in the native units of chess_set.glb (produced by the splitter).
@@ -107,6 +113,28 @@ private enum class Marker(val color: ComposeColor, val radius: Float) {
 }
 
 /**
+ * One piece travelling through the air: from [from] to [to] along a parabola [lift] units
+ * high at its peak, starting [delay] seconds after the move and taking [duration] seconds.
+ * [spin] turns the piece about its vertical axis on the way (used for captured pieces).
+ */
+private class Flight(
+    val node: ModelNode,
+    val from: Position,
+    val to: Position,
+    val fromScale: Float,
+    val toScale: Float,
+    val lift: Float,
+    val delay: Float,
+    val duration: Float,
+    val spin: Float = 0f,
+)
+
+/** A move changes at most 4 squares (castling); an undo of two plies at most 8. More means a new game or a load: snap instead of flying 30 pieces around. */
+private const val MAX_ANIMATED_SQUARES = 8
+
+private fun easeInOut(t: Float): Float = if (t < 0.5f) 4f * t * t * t else 1f - (-2f * t + 2f).let { it * it * it } / 2f
+
+/**
  * Owns every Filament node for the board. All piece and marker instances are created
  * once and added to the scene up-front; each [sync] only toggles visibility and moves
  * transforms (Filament reads those every frame), so the scene-graph list never churns.
@@ -123,6 +151,12 @@ private class Chess3DController(
     private val markerCursor = HashMap<Marker, Int>()
     var ready = false
         private set
+
+    // Board as last drawn, and which node stands on each square / in each captured slot,
+    // so the next sync can tell which piece moved where and fly it there.
+    private var prevSquares: Array<Piece?>? = null
+    private val nodeOnSquare = HashMap<Int, ModelNode>()
+    private val capturedNodes = ArrayList<Pair<Piece, ModelNode>>()
 
     // generous instance budgets (cover promotions); pawns can never exceed 8 per side.
     private val counts = mapOf("p" to 8, "n" to 10, "b" to 10, "r" to 10, "q" to 10, "k" to 1)
@@ -186,8 +220,11 @@ private class Chess3DController(
         camera.lookAt(CAM_TARGET)
     }
 
-    fun sync(vm: ChessViewModel) {
-        if (!ready) return
+    fun sync(vm: ChessViewModel): List<Flight> {
+        if (!ready) return emptyList()
+        val prevCaptured = capturedNodes.map { it.second }.toSet()
+        nodeOnSquare.clear()
+        capturedNodes.clear()
         pieceInstances.values.forEach { l -> l.forEach { it.isVisible = false } }
         markerInstances.values.forEach { l -> l.forEach { it.isVisible = false } }
         cursor.clear()
@@ -206,12 +243,87 @@ private class Chess3DController(
             val node = nextPiece(keyOf(p)) ?: continue
             node.scale = Scale(PIECE_SCALE, PIECE_SCALE, PIECE_SCALE)
             node.position = BoardGeo.position(sq)
+            node.rotation = Rotation(0f, 0f, 0f)
             node.isVisible = true
+            nodeOnSquare[sq] = node
         }
 
         // ----- captured pieces, lined up off-board -----
         lineUp(captured(vm, Color.BLACK), nearSide = true)  // Black pieces taken -> White's side (near)
         lineUp(captured(vm, Color.WHITE), nearSide = false) // White pieces taken -> Black's side (far)
+
+        val now = vm.board.squares.copyOf()
+        val prev = prevSquares
+        prevSquares = now
+        return if (prev == null) emptyList() else flights(prev, now, prevCaptured)
+    }
+
+    /**
+     * Work out which pieces moved by diffing the previous and current boards. Each square
+     * that gained a piece takes it from a square that lost the same piece (a pawn of that
+     * colour for a promotion); pieces that vanished from the board fly to their new slot in
+     * the captured line-up, knocked off just as the capturing piece lands.
+     */
+    private fun flights(prev: Array<Piece?>, now: Array<Piece?>, prevCaptured: Set<ModelNode>): List<Flight> {
+        val changed = (0..63).filter { prev[it] != now[it] }
+        if (changed.isEmpty() || changed.size > MAX_ANIMATED_SQUARES) return emptyList()
+        val sources = changed.filter { prev[it] != null }.toMutableList()
+        val out = ArrayList<Flight>()
+        var landing = 0f
+        for (to in changed) {
+            val piece = now[to] ?: continue
+            val from = sources.firstOrNull { prev[it] == piece && now[it] != piece }
+                ?: sources.firstOrNull { prev[it]?.color == piece.color && prev[it]?.type == PieceType.PAWN && now[it] == null }
+                ?: continue
+            sources.remove(from)
+            val node = nodeOnSquare[to] ?: continue
+            val squares = max(abs(fileOf(from) - fileOf(to)), abs(rankOf(from) - rankOf(to)))
+            val knight = piece.type == PieceType.KNIGHT
+            val duration = min(0.62f, 0.26f + 0.05f * squares)
+            out += Flight(
+                node, BoardGeo.position(from), BoardGeo.position(to), PIECE_SCALE, PIECE_SCALE,
+                lift = if (knight) 2.2f else 0.35f + 0.08f * squares, delay = 0f, duration = duration,
+            )
+            landing = max(landing, duration * 0.85f)
+        }
+        // Whatever is left in [sources] lost its piece to a capture (or en passant).
+        val fresh = capturedNodes.filter { it.second !in prevCaptured }.toMutableList()
+        for (sq in sources) {
+            val piece = prev[sq] ?: continue
+            val hit = fresh.firstOrNull { it.first == piece } ?: continue
+            fresh.remove(hit)
+            val node = hit.second
+            val slot = node.position.let { Position(it.x, it.y, it.z) }
+            out += Flight(
+                node, BoardGeo.position(sq), slot, PIECE_SCALE, 0.55f,
+                lift = 3.2f, delay = landing, duration = 0.55f, spin = 360f,
+            )
+        }
+        return out
+    }
+
+    /** Fly every piece in [flights], one frame at a time, then leave each exactly on its target. */
+    suspend fun play(flights: List<Flight>) {
+        if (flights.isEmpty()) return
+        for (f in flights) place(f, 0f)
+        val start = withFrameNanos { it }
+        val end = flights.maxOf { it.delay + it.duration }
+        var elapsed = 0f
+        while (elapsed < end) {
+            elapsed = (withFrameNanos { it } - start) / 1e9f
+            for (f in flights) place(f, ((elapsed - f.delay) / f.duration).coerceIn(0f, 1f))
+        }
+        for (f in flights) place(f, 1f)
+    }
+
+    private fun place(f: Flight, t: Float) {
+        val e = easeInOut(t)
+        val p = f.from + (f.to - f.from) * e
+        val arc = f.lift * sin(PI.toFloat() * t)
+        f.node.position = Position(p.x, p.y + arc, p.z)
+        val s = f.fromScale + (f.toScale - f.fromScale) * e
+        f.node.scale = Scale(s, s, s)
+        f.node.rotation = Rotation(0f, f.spin * e, 0f)
     }
 
     private fun placeMarker(kind: Marker, sq: Int) {
@@ -226,7 +338,9 @@ private class Chess3DController(
             val node = nextPiece(keyOf(p)) ?: return@forEachIndexed
             node.scale = Scale(0.55f, 0.55f, 0.55f)
             node.position = BoardGeo.capturedSlot(i, nearSide)
+            node.rotation = Rotation(0f, 0f, 0f)
             node.isVisible = true
+            capturedNodes += p to node
         }
     }
 
@@ -329,11 +443,13 @@ fun Board3DView(vm: ChessViewModel, modifier: Modifier = Modifier) {
             sceneNodes.add(fillRight)
         }
         controller.placeCamera(cameraNode, vm.flipped)
-        controller.sync(vm)
+        controller.sync(vm) // first draw: nothing to fly
     }
     LaunchedEffect(vm.flipped) { controller.placeCamera(cameraNode, vm.flipped) }
+    // A new board starts a new flight; if another move lands mid-flight this effect restarts
+    // and the next sync snaps every piece to its square before flying the new move.
     LaunchedEffect(vm.board, vm.selected, vm.legalTargets, vm.lastMove, vm.checkSquare) {
-        controller.sync(vm)
+        controller.play(controller.sync(vm))
     }
 
     Box(modifier) {
