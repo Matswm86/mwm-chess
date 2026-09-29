@@ -92,9 +92,8 @@ private val WORLD_UP = Position(0f, 1f, 0f)
 
 /**
  * On-board pieces are drawn 1.3x their native size so they read clearly from the
- * pulled-back camera. Safe against neighbours: the widest piece pair that can ever be
- * adjacent in a legal position (king+queen ~1.46 avg footprint) stays under the 2.0
- * square pitch at this scale; only two adjacent kings would touch, which is illegal.
+ * pulled-back camera. Safe against neighbours: the widest pieces (king 1.47, queen 1.51
+ * native footprint) average 1.49, which is 1.94 at this scale, under the 2.0 square pitch.
  */
 private const val PIECE_SCALE = 1.3f
 
