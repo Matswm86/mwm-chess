@@ -64,10 +64,11 @@ small blunder chance); the AI runs off the UI thread so the board never freezes.
 ## Tech
 
 Kotlin + Jetpack Compose (Material 3), single Activity, `minSdk 26`. The board is
-rendered by **SceneView** (Google **Filament**); the source chess set is split
-into a static board plus twelve instanced piece models under
-`app/src/main/assets/models/`, placed and driven from the same game state as the
-UI. Rules and move generation live in
+rendered by **SceneView** (Google **Filament**): a static board plus twelve
+instanced medieval piece models under `app/src/main/assets/models/`, placed and
+driven from the same game state as the UI. Moves are animated in 3D: pieces glide
+between squares, knights hop, and captured pieces are knocked off into a line-up
+beside the board. Rules and move generation live in
 `app/src/main/java/no/mwm/chess/engine/`, the search in `…/engine/ai/`, and the
 Compose UI + 3D board in `…/ui/`. No game or chart libraries.
 
@@ -84,8 +85,9 @@ gradle wrapper --gradle-version 8.7   # first time only, generates ./gradlew
 
 ## License
 
-**GPL-3.0-or-later** — see [`LICENSE`](LICENSE). The 3D chess set is
-"Chess set" by brendan wood, used under **CC-BY-4.0**; UI text is set in
+**GPL-3.0-or-later** — see [`LICENSE`](LICENSE). The 3D pieces are
+"0014_ Medieval HRE-ERE Chess Set" by Average3DmodelEnjoyer and the board is from
+"Chess set" by brendan wood, both used under **CC-BY-4.0**; UI text is set in
 **Cinzel** (SIL Open Font License); 3D rendering uses **SceneView / Filament**
 (Apache-2.0). Full attributions in [`NOTICE.md`](NOTICE.md). Free and open
 source, made for learning rather than profit.
