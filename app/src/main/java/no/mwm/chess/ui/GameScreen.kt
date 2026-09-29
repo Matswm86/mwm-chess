@@ -70,6 +70,12 @@ fun GameScreen(vm: ChessViewModel) {
     // The game code gets the whole screen; the board appears only after Continue.
     if (vm.mode == GameMode.ONLINE && vm.codeCardOpen && !vm.isGameOver) {
         CodeCard(vm)
+        if (confirmLeave) {
+            LeaveDialog(
+                onStay = { confirmLeave = false },
+                onLeave = { confirmLeave = false; vm.backToMenu() },
+            )
+        }
         return
     }
 
