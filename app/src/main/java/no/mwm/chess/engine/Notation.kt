@@ -25,6 +25,22 @@ object Notation {
         return "${pieceLetter(piece.type)}$disamb$capture$dest$suffix"
     }
 
+    /** UCI text for a move, e.g. "e2e4" or "e7e8q"; the online rooms send moves this way. */
+    fun uci(move: Move): String {
+        val promo = when (move.promotion) {
+            PieceType.QUEEN -> "q"
+            PieceType.ROOK -> "r"
+            PieceType.BISHOP -> "b"
+            PieceType.KNIGHT -> "n"
+            else -> ""
+        }
+        return "${squareName(move.from)}${squareName(move.to)}$promo"
+    }
+
+    /** The legal move in [board] that [text] names in UCI, or null if none does. */
+    fun parseUci(board: Board, text: String): Move? =
+        MoveGen.legalMoves(board).firstOrNull { uci(it) == text }
+
     private fun disambiguation(before: Board, move: Move, piece: Piece): String {
         val rivals = MoveGen.legalMoves(before).filter {
             it.to == move.to && it.from != move.from &&

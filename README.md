@@ -3,8 +3,9 @@
 A clean, beginner-friendly chess game for Android, now on a **real-time 3D
 board**. Free, open source, and made for people who are still learning the game:
 pick up a piece and it shows you exactly where it can move. Play the computer at
-four strengths or a friend on the same phone. No ads, no tracking, no network,
-everything runs on-device.
+four strengths, a friend on the same phone, or a friend on their own phone with
+a 4-letter game code. No ads and no tracking. Only online games use the
+network, and they send nothing but the moves.
 
 ![MWM Chess — the royal-wood board design](docs/screenshot.png)
 
@@ -36,6 +37,10 @@ artifact `mwm-chess-debug`* (requires a GitHub login to download artifacts).
 - **Play the computer** at four strengths: **Easy → Medium → Hard → Expert.**
   Easy sometimes plays a loose move so beginners can win; Expert searches deep
   and doesn't. Or play **two-player pass-and-play** on one device.
+- **Play a friend online** — one player taps *Create game* and gets a 4-letter
+  code to share; the friend types it under *Join a friend's game*. Moves travel
+  through a small room server at `chess.mwmai.no`, and both phones check every
+  move with their own rules engine. After the game, *Rematch* swaps colours.
 - **See every legal move** — tap a piece: reachable empty squares get a marker,
   pieces you can take get a ring, and your king glows red when it's in check.
 - **A hint button** — asks the engine for the best move for your side.
@@ -47,8 +52,9 @@ artifact `mwm-chess-debug`* (requires a GitHub login to download artifacts).
 
 ## Screens
 
-- **Menu** — choose mode (vs computer / two players), difficulty, and which
-  colour you play.
+- **Menu** — choose mode (vs computer / two players on one phone / a friend
+  online), difficulty, and which colour you play. Online mode shows *Create
+  game* and *Join a friend's game* instead.
 - **Game** — the 3D board, a top bar with the current level and difficulty, a
   turn/status line with a material-lead badge, and an Undo / Hint / Restart /
   Resign bar. A settings gear changes difficulty, flips the board, toggles
@@ -71,6 +77,14 @@ between squares, knights hop, and captured pieces are knocked off into a line-up
 beside the board. Rules and move generation live in
 `app/src/main/java/no/mwm/chess/engine/`, the search in `…/engine/ai/`, and the
 Compose UI + 3D board in `…/ui/`. No game or chart libraries.
+
+## Online rooms server
+
+`server/server.py` is the room server behind `chess.mwmai.no`: one Python file,
+standard library only, rooms kept in memory for up to 6 idle hours. It keeps the
+move list, checks turn order, and relays moves to the other phone by long-poll;
+it does not know the chess rules. Tests: `cd server && python3 -m unittest
+test_server`. Deploy: `server/deploy.sh` (systemd user unit plus a Caddy block).
 
 ## Build locally
 

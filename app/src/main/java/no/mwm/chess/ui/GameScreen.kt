@@ -1,5 +1,6 @@
 package no.mwm.chess.ui
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -29,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -57,13 +59,18 @@ fun GameScreen(vm: ChessViewModel) {
         ) {
             TopBar(vm, onSettings = { showSettings = true })
             TurnStrip(vm)
+            vm.onlineError?.let { OnlineNotice(it) { vm.clearOnlineError() } }
             Board3DView(vm, Modifier.weight(1f).fillMaxWidth())
             ActionBar(vm)
         }
 
         if (showSettings) SettingsPopover(vm, onDismiss = { showSettings = false })
         if (vm.pendingPromotion != null) PromotionSheet(vm)
-        if (vm.isGameOver) GameOverOverlay(vm)
+        if (vm.isGameOver) {
+            GameOverOverlay(vm)
+        } else if (vm.mode == GameMode.ONLINE && vm.onlinePhase == OnlinePhase.WAITING) {
+            WaitingOverlay(vm)
+        }
     }
 }
 
@@ -78,21 +85,34 @@ private fun TopBar(vm: ChessViewModel, onSettings: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        KingAvatar(thinking = vm.thinking)
+        KingAvatar(thinking = vm.thinking || vm.reconnecting)
         Column(
             Modifier.weight(1f).padding(horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                "LEVEL ${vm.difficulty.ordinal + 1}",
-                fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 18.sp,
-                letterSpacing = 3.sp, color = Design.creamBright,
-            )
-            Text(
-                vm.difficulty.label.uppercase(),
-                fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
-                letterSpacing = 4.sp, color = Design.goldText,
-            )
+            if (vm.mode == GameMode.ONLINE) {
+                Text(
+                    "ONLINE",
+                    fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                    letterSpacing = 3.sp, color = Design.creamBright,
+                )
+                Text(
+                    "GAME ${vm.onlineCode ?: ""}",
+                    fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
+                    letterSpacing = 4.sp, color = Design.goldText,
+                )
+            } else {
+                Text(
+                    "LEVEL ${vm.difficulty.ordinal + 1}",
+                    fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 18.sp,
+                    letterSpacing = 3.sp, color = Design.creamBright,
+                )
+                Text(
+                    vm.difficulty.label.uppercase(),
+                    fontFamily = Cinzel, fontWeight = FontWeight.SemiBold, fontSize = 11.sp,
+                    letterSpacing = 4.sp, color = Design.goldText,
+                )
+            }
         }
         CircleButton(glyph = "⚙", size = 46.dp, onClick = onSettings)
     }
@@ -165,6 +185,10 @@ private fun TurnStrip(vm: ChessViewModel) {
 
 @Composable
 private fun ActionBar(vm: ChessViewModel) {
+    if (vm.mode == GameMode.ONLINE) {
+        OnlineActionBar(vm)
+        return
+    }
     val canUndo = vm.canUndo && !vm.thinking && !vm.isGameOver
     val canHint = !vm.hinting && !vm.thinking && !vm.isGameOver &&
         (vm.mode != GameMode.VS_AI || vm.board.sideToMove == vm.humanColor)
@@ -182,6 +206,107 @@ private fun ActionBar(vm: ChessViewModel) {
             vm.startGame(vm.mode, vm.difficulty, choice)
         }
         ActionColumn("⚑", "RESIGN", enabled = !vm.isGameOver) { vm.resign() }
+    }
+}
+
+@Composable
+private fun OnlineActionBar(vm: ChessViewModel) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF123331), androidx.compose.ui.graphics.Color(0xFF0A1F1D))))
+            .padding(top = 12.dp, bottom = 10.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        ActionColumn("⇅", "FLIP", enabled = true) { vm.flipBoard() }
+        ActionColumn("⌂", "LEAVE", enabled = true) { vm.backToMenu() }
+        ActionColumn("⚑", "RESIGN", enabled = !vm.isGameOver && vm.onlinePhase == OnlinePhase.PLAYING) { vm.resign() }
+    }
+}
+
+/** A problem with the online game, shown under the turn line; tap to hide it. */
+@Composable
+private fun OnlineNotice(text: String, onDismiss: () -> Unit) {
+    Text(
+        text,
+        fontFamily = Cinzel, fontSize = 12.sp, color = Design.danger, textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onDismiss() }
+            .padding(horizontal = 20.dp, vertical = 4.dp),
+    )
+}
+
+/** Shown until the friend joins: the code in big letters and a share button. */
+@Composable
+private fun WaitingOverlay(vm: ChessViewModel) {
+    val context = LocalContext.current
+    val code = vm.onlineCode ?: ""
+    Box(
+        Modifier.fillMaxSize().background(Design.scrim),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .width(300.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Design.panel)
+                .border(1.5.dp, Design.gold, RoundedCornerShape(18.dp))
+                .padding(horizontal = 22.dp, vertical = 26.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "YOUR GAME CODE",
+                fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 2.sp,
+                color = Design.goldText,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                code,
+                fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 44.sp, letterSpacing = 10.sp,
+                color = Design.creamBright,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Your friend opens MWM Chess, picks \"Play a friend online\" and types this code. " +
+                    "You play ${if (vm.humanColor == Color.WHITE) "White" else "Black"}.",
+                fontFamily = Cinzel, fontSize = 12.sp, color = Design.muted, textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(16.dp))
+            CircularProgressIndicator(Modifier.size(26.dp), color = Design.goldLight, strokeWidth = 2.5.dp)
+            Spacer(Modifier.height(16.dp))
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF9A6730), androidx.compose.ui.graphics.Color(0xFF5A3A19))))
+                    .border(1.5.dp, Design.gold, RoundedCornerShape(11.dp))
+                    .clickable {
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(
+                                Intent.EXTRA_TEXT,
+                                "Play chess with me! Open MWM Chess, pick \"Play a friend online\" and enter the code $code",
+                            )
+                        }
+                        context.startActivity(Intent.createChooser(send, "Share game code"))
+                    }
+                    .padding(vertical = 13.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    "SHARE CODE",
+                    fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 2.sp,
+                    color = Design.creamBright,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Cancel",
+                fontFamily = Cinzel, fontSize = 13.sp, color = Design.muted,
+                modifier = Modifier.clickable { vm.backToMenu() }.padding(6.dp),
+            )
+        }
     }
 }
 
@@ -246,13 +371,15 @@ private fun SettingsPopover(vm: ChessViewModel, onDismiss: () -> Unit) {
                 // swallow taps inside the panel
                 .clickable(interactionSource = panelSource, indication = null) {},
         ) {
-            PanelHeader("DIFFICULTY")
-            Difficulty.entries.forEach { d ->
-                SettingRow(
-                    label = d.label,
-                    active = d == vm.difficulty,
-                    onClick = { vm.changeDifficulty(d) },
-                )
+            if (vm.mode != GameMode.ONLINE) {
+                PanelHeader("DIFFICULTY")
+                Difficulty.entries.forEach { d ->
+                    SettingRow(
+                        label = d.label,
+                        active = d == vm.difficulty,
+                        onClick = { vm.changeDifficulty(d) },
+                    )
+                }
             }
             PanelHeader("BOARD")
             SettingRow("Flip board", active = false) { vm.flipBoard() }
@@ -340,6 +467,7 @@ private fun PromotionSheet(vm: ChessViewModel) {
 @Composable
 private fun GameOverOverlay(vm: ChessViewModel) {
     val outcome = gameOutcome(vm)
+    val online = vm.mode == GameMode.ONLINE
     Box(
         Modifier.fillMaxSize().background(Design.scrim),
         contentAlignment = Alignment.Center,
@@ -366,6 +494,18 @@ private fun GameOverOverlay(vm: ChessViewModel) {
                 fontFamily = Cinzel, fontSize = 12.sp, letterSpacing = 1.sp, color = Design.muted,
                 textAlign = TextAlign.Center,
             )
+            if (online) {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    when {
+                        vm.onlineEndReason == "left" -> "Your friend left the game."
+                        vm.opponentWantsRematch -> "Your friend wants a rematch. Colours swap."
+                        !vm.opponentOnline -> "Your friend is offline."
+                        else -> "Rematch swaps colours."
+                    },
+                    fontFamily = Cinzel, fontSize = 12.sp, color = Design.goldText, textAlign = TextAlign.Center,
+                )
+            }
             Spacer(Modifier.height(22.dp))
             Box(
                 Modifier
@@ -373,15 +513,23 @@ private fun GameOverOverlay(vm: ChessViewModel) {
                     .clip(RoundedCornerShape(11.dp))
                     .background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF9A6730), androidx.compose.ui.graphics.Color(0xFF5A3A19))))
                     .border(1.5.dp, Design.gold, RoundedCornerShape(11.dp))
-                    .clickable {
-                        val choice = if (vm.humanColor == Color.WHITE) ColorChoice.WHITE else ColorChoice.BLACK
-                        vm.startGame(vm.mode, vm.difficulty, choice)
+                    .clickable(enabled = !(online && vm.youWantRematch)) {
+                        if (online) {
+                            vm.requestRematch()
+                        } else {
+                            val choice = if (vm.humanColor == Color.WHITE) ColorChoice.WHITE else ColorChoice.BLACK
+                            vm.startGame(vm.mode, vm.difficulty, choice)
+                        }
                     }
                     .padding(vertical = 13.dp),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    "NEW GAME",
+                    when {
+                        !online -> "NEW GAME"
+                        vm.youWantRematch -> "WAITING FOR FRIEND…"
+                        else -> "REMATCH"
+                    },
                     fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 2.sp,
                     color = Design.creamBright,
                 )
@@ -402,6 +550,16 @@ private fun turnLabel(vm: ChessViewModel): Pair<String, androidx.compose.ui.grap
     if (vm.isGameOver) return "Game over" to Design.muted
     if (vm.thinking) return "Opponent is thinking…" to Design.goldText
     val inCheck = vm.status.type == StatusType.CHECK
+    if (vm.mode == GameMode.ONLINE) {
+        return when {
+            vm.onlinePhase != OnlinePhase.PLAYING -> "Waiting for your friend to join" to Design.muted
+            vm.reconnecting -> "Reconnecting…" to Design.danger
+            !vm.opponentOnline -> "Your friend is offline, waiting…" to Design.danger
+            vm.board.sideToMove == vm.humanColor ->
+                if (inCheck) "Check — your move" to Design.danger else "Your move" to Design.cream
+            else -> "Friend's move…" to Design.muted
+        }
+    }
     return if (vm.mode == GameMode.VS_AI) {
         if (vm.board.sideToMove == vm.humanColor) {
             if (inCheck) "Check — your move" to Design.danger else "Your move" to Design.cream
@@ -434,7 +592,7 @@ private fun points(vm: ChessViewModel, color: Color): Int {
 
 /** Material lead of the human (VS_AI) or White (two-player), or null if even. */
 private fun materialLead(vm: ChessViewModel): String? {
-    val me = if (vm.mode == GameMode.VS_AI) vm.humanColor else Color.WHITE
+    val me = if (vm.mode == GameMode.TWO_PLAYER) Color.WHITE else vm.humanColor
     val lead = points(vm, me.opposite) - points(vm, me)
     return if (lead > 0) "+$lead" else null
 }
@@ -443,6 +601,21 @@ private class Outcome(val title: String, val subtitle: String, val icon: String,
 
 private fun gameOutcome(vm: ChessViewModel): Outcome {
     val s = vm.status
+    if (vm.mode == GameMode.ONLINE) {
+        val w = vm.onlineWinner
+        if (w != null && !s.isOver) {
+            val won = w == vm.humanColor
+            return when {
+                vm.onlineEndReason == "left" -> Outcome("VICTORY", "Your friend left the game", "♚", Design.good)
+                won -> Outcome("VICTORY", "Your friend resigned", "♚", Design.good)
+                else -> Outcome("DEFEAT", "You resigned the game", "♟", Design.danger)
+            }
+        }
+        if (s.type == StatusType.CHECKMATE) {
+            return if (s.winner == vm.humanColor) Outcome("VICTORY", "Checkmate — well played", "♚", Design.good)
+            else Outcome("DEFEAT", "Checkmate", "♟", Design.danger)
+        }
+    }
     if (vm.resigned && !s.isOver) {
         return if (vm.mode == GameMode.VS_AI) {
             Outcome("DEFEAT", "You resigned the game", "♟", Design.danger)

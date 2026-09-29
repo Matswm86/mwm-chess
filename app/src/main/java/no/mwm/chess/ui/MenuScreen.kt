@@ -16,7 +16,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,7 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -68,41 +76,136 @@ fun MenuScreen(vm: ChessViewModel) {
 
         Section("Mode") {
             ChipRow(
-                listOf("Play the computer" to GameMode.VS_AI, "Two players" to GameMode.TWO_PLAYER),
-                mode,
-            ) { mode = it }
-        }
-
-        if (mode == GameMode.VS_AI) {
-            Spacer(Modifier.height(14.dp))
-            Section("Difficulty") {
-                ChipRow(Difficulty.entries.map { it.label to it }, difficulty) { difficulty = it }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    difficultyHint(difficulty),
-                    fontFamily = Cinzel, fontSize = 12.sp, color = Design.muted,
-                )
-            }
-        }
-
-        Spacer(Modifier.height(14.dp))
-        Section(if (mode == GameMode.VS_AI) "Play as" else "Bottom side") {
-            ChipRow(
                 listOf(
-                    "White" to ColorChoice.WHITE,
-                    "Random" to ColorChoice.RANDOM,
-                    "Black" to ColorChoice.BLACK,
+                    "Play the computer" to GameMode.VS_AI,
+                    "Two players, one phone" to GameMode.TWO_PLAYER,
+                    "Play a friend online" to GameMode.ONLINE,
                 ),
-                color,
-            ) { color = it }
+                mode,
+            ) { mode = it; vm.clearOnlineError() }
         }
 
-        Spacer(Modifier.height(30.dp))
-        StartButton { vm.startGame(mode, difficulty, color) }
-        Spacer(Modifier.height(18.dp))
+        if (mode == GameMode.ONLINE) {
+            OnlineMenu(vm, color) { color = it }
+        } else {
+            if (mode == GameMode.VS_AI) {
+                Spacer(Modifier.height(14.dp))
+                Section("Difficulty") {
+                    ChipRow(Difficulty.entries.map { it.label to it }, difficulty) { difficulty = it }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        difficultyHint(difficulty),
+                        fontFamily = Cinzel, fontSize = 12.sp, color = Design.muted,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(14.dp))
+            Section(if (mode == GameMode.VS_AI) "Play as" else "Bottom side") {
+                ChipRow(
+                    listOf(
+                        "White" to ColorChoice.WHITE,
+                        "Random" to ColorChoice.RANDOM,
+                        "Black" to ColorChoice.BLACK,
+                    ),
+                    color,
+                ) { color = it }
+            }
+
+            Spacer(Modifier.height(30.dp))
+            StartButton { vm.startGame(mode, difficulty, color) }
+            Spacer(Modifier.height(18.dp))
+            Text(
+                "Tap a piece to see where it can go.",
+                fontFamily = Cinzel, fontSize = 12.sp, color = Design.muted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OnlineMenu(vm: ChessViewModel, color: ColorChoice, onColor: (ColorChoice) -> Unit) {
+    var code by remember { mutableStateOf("") }
+
+    Spacer(Modifier.height(14.dp))
+    Section("Start a new game") {
         Text(
-            "Tap a piece to see where it can go.",
+            "You get a 4-letter code. Send it to your friend, and the game starts when they join.",
             fontFamily = Cinzel, fontSize = 12.sp, color = Design.muted,
+        )
+        Spacer(Modifier.height(12.dp))
+        ChipRow(
+            listOf(
+                "White" to ColorChoice.WHITE,
+                "Random" to ColorChoice.RANDOM,
+                "Black" to ColorChoice.BLACK,
+            ),
+            color,
+            onColor,
+        )
+        Spacer(Modifier.height(14.dp))
+        GoldButton("CREATE GAME", enabled = !vm.connecting) { vm.createOnlineGame(color) }
+    }
+
+    Spacer(Modifier.height(14.dp))
+    Section("Join a friend's game") {
+        OutlinedTextField(
+            value = code,
+            onValueChange = { raw -> code = raw.uppercase().filter { it in 'A'..'Z' }.take(4) },
+            placeholder = { Text("CODE", fontFamily = Cinzel, color = Design.muted.copy(alpha = 0.5f)) },
+            singleLine = true,
+            textStyle = TextStyle(
+                fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 24.sp,
+                letterSpacing = 8.sp, color = Design.creamBright, textAlign = TextAlign.Center,
+            ),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Characters,
+                autoCorrect = false,
+                imeAction = ImeAction.Go,
+            ),
+            keyboardActions = KeyboardActions(onGo = { vm.joinOnlineGame(code) }),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = Design.goldLight,
+                unfocusedBorderColor = Design.gold,
+                cursorColor = Design.goldLight,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(14.dp))
+        GoldButton("JOIN GAME", enabled = !vm.connecting && code.length == 4) { vm.joinOnlineGame(code) }
+    }
+
+    Spacer(Modifier.height(18.dp))
+    if (vm.connecting) {
+        CircularProgressIndicator(Modifier.height(28.dp), color = Design.goldLight, strokeWidth = 2.5.dp)
+    }
+    vm.onlineError?.let {
+        Text(it, fontFamily = Cinzel, fontSize = 13.sp, textAlign = TextAlign.Center, color = Design.danger)
+    }
+    Spacer(Modifier.height(10.dp))
+    Text(
+        "Online games need an internet connection. Only the moves are sent, nothing else.",
+        fontFamily = Cinzel, fontSize = 11.sp, textAlign = TextAlign.Center, color = Design.muted,
+    )
+}
+
+@Composable
+private fun GoldButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(shape)
+            .background(Brush.verticalGradient(listOf(Color(0xFF9A6730), Color(0xFF5A3A19))))
+            .border(1.5.dp, Design.gold, shape)
+            .clickable(enabled = enabled) { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = 2.sp,
+            color = if (enabled) Design.creamBright else Design.muted.copy(alpha = 0.5f),
         )
     }
 }

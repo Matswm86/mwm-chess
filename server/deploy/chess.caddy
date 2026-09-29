@@ -1,0 +1,28 @@
+# chess.mwmai.no: online rooms for the MWM Chess Android app (mwm-chess/server).
+# Only the JSON API lives here; it goes to the mwm-chess user service on
+# 127.0.0.1:8796. The API answers 200 even for errors, so two players behind one
+# Wi-Fi IP never trip the caddy-4xx fail2ban jail.
+chess.mwmai.no {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy 127.0.0.1:8796
+	}
+
+	handle {
+		respond "MWM Chess online rooms. Get the app at https://github.com/Matswm86/mwm-chess" 200
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# fail2ban reads this file; a vhost without it is invisible to the jails.
+	log {
+		output file /var/log/caddy/access.log
+		format json
+	}
+}
