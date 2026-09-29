@@ -98,6 +98,12 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var opponentOnline by mutableStateOf(false)
         private set
+    /** True while the game-code card is on screen; it stays until the player taps Continue. */
+    var codeCardOpen by mutableStateOf(false)
+        private set
+    /** True when this phone joined a friend's game by code, false when it created the game. */
+    var joinedByCode by mutableStateOf(false)
+        private set
     var opponentWantsRematch by mutableStateOf(false)
         private set
     var youWantRematch by mutableStateOf(false)
@@ -166,7 +172,7 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
             ColorChoice.BLACK -> "black"
             ColorChoice.RANDOM -> "random"
         }
-        connectThen { online.create(color) }
+        connectThen(joined = false) { online.create(color) }
     }
 
     /** Join a friend's online game by its 4-letter code. */
@@ -176,20 +182,25 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
             onlineError = "A game code is 4 letters."
             return
         }
-        connectThen { online.join(clean) }
+        connectThen(joined = true) { online.join(clean) }
     }
 
     fun clearOnlineError() {
         onlineError = null
     }
 
-    private fun connectThen(open: suspend () -> Seat) {
+    /** Hide the game-code card and show the board. */
+    fun dismissCodeCard() {
+        codeCardOpen = false
+    }
+
+    private fun connectThen(joined: Boolean, open: suspend () -> Seat) {
         if (connecting) return
         connecting = true
         onlineError = null
         viewModelScope.launch {
             try {
-                enterOnline(open())
+                enterOnline(open(), joined)
             } catch (e: OnlineError) {
                 onlineError = OnlineClient.describe(e.code)
             } finally {
@@ -198,8 +209,10 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun enterOnline(s: Seat) {
+    private fun enterOnline(s: Seat, joined: Boolean) {
         seat = s
+        joinedByCode = joined
+        codeCardOpen = true
         mode = GameMode.ONLINE
         onlineCode = s.code
         humanColor = colorOf(s.color)
@@ -340,6 +353,7 @@ class ChessViewModel(app: Application) : AndroidViewModel(app) {
         pollJob = null
         val s = seat ?: return
         seat = null
+        codeCardOpen = false
         onlinePhase = null
         onlineCode = null
         onlineWinner = null

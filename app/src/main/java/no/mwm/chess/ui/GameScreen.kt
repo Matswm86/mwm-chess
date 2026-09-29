@@ -1,6 +1,7 @@
 package no.mwm.chess.ui
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +46,26 @@ import no.mwm.chess.ui.theme.Design
 @Composable
 fun GameScreen(vm: ChessViewModel) {
     var showSettings by remember { mutableStateOf(false) }
+    var confirmLeave by remember { mutableStateOf(false) }
+
+    // Leaving a running online game hands the win to the friend, so ask first.
+    val goHome: () -> Unit = {
+        if (vm.mode == GameMode.ONLINE && vm.onlinePhase == OnlinePhase.PLAYING && !vm.isGameOver) {
+            confirmLeave = true
+        } else {
+            vm.backToMenu()
+        }
+    }
+
+    // The phone's back button closes the open panel first, then returns to the main menu.
+    BackHandler {
+        when {
+            showSettings -> showSettings = false
+            confirmLeave -> confirmLeave = false
+            vm.pendingPromotion != null -> vm.cancelPromotion()
+            else -> goHome()
+        }
+    }
 
     Box(
         Modifier
@@ -57,7 +78,7 @@ fun GameScreen(vm: ChessViewModel) {
                 .systemBarsPadding(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            TopBar(vm, onSettings = { showSettings = true })
+            TopBar(vm, onHome = goHome, onSettings = { showSettings = true })
             TurnStrip(vm)
             vm.onlineError?.let { OnlineNotice(it) { vm.clearOnlineError() } }
             Board3DView(vm, Modifier.weight(1f).fillMaxWidth())
@@ -68,8 +89,14 @@ fun GameScreen(vm: ChessViewModel) {
         if (vm.pendingPromotion != null) PromotionSheet(vm)
         if (vm.isGameOver) {
             GameOverOverlay(vm)
-        } else if (vm.mode == GameMode.ONLINE && vm.onlinePhase == OnlinePhase.WAITING) {
-            WaitingOverlay(vm)
+        } else if (vm.mode == GameMode.ONLINE && vm.codeCardOpen) {
+            CodeCard(vm)
+        }
+        if (confirmLeave) {
+            LeaveDialog(
+                onStay = { confirmLeave = false },
+                onLeave = { confirmLeave = false; vm.backToMenu() },
+            )
         }
     }
 }
@@ -77,7 +104,7 @@ fun GameScreen(vm: ChessViewModel) {
 // ---------------------------------------------------------------- top bar
 
 @Composable
-private fun TopBar(vm: ChessViewModel, onSettings: () -> Unit) {
+private fun TopBar(vm: ChessViewModel, onHome: () -> Unit, onSettings: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -85,6 +112,8 @@ private fun TopBar(vm: ChessViewModel, onSettings: () -> Unit) {
             .padding(horizontal = 14.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        CircleButton(glyph = "⌂", size = 46.dp, onClick = onHome)
+        Spacer(Modifier.width(10.dp))
         KingAvatar(thinking = vm.thinking || vm.reconnecting)
         Column(
             Modifier.weight(1f).padding(horizontal = 12.dp),
@@ -237,11 +266,16 @@ private fun OnlineNotice(text: String, onDismiss: () -> Unit) {
     )
 }
 
-/** Shown until the friend joins: the code in big letters and a share button. */
+/**
+ * The game code in big letters. It stays on screen until the player taps Continue, also after
+ * the friend has joined, so there is time to read and share it.
+ */
 @Composable
-private fun WaitingOverlay(vm: ChessViewModel) {
+private fun CodeCard(vm: ChessViewModel) {
     val context = LocalContext.current
     val code = vm.onlineCode ?: ""
+    val waiting = vm.onlinePhase == OnlinePhase.WAITING
+    val side = if (vm.humanColor == Color.WHITE) "White" else "Black"
     Box(
         Modifier.fillMaxSize().background(Design.scrim),
         contentAlignment = Alignment.Center,
@@ -256,7 +290,7 @@ private fun WaitingOverlay(vm: ChessViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                "YOUR GAME CODE",
+                if (vm.joinedByCode) "YOU JOINED GAME" else "YOUR GAME CODE",
                 fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 2.sp,
                 color = Design.goldText,
             )
@@ -268,45 +302,100 @@ private fun WaitingOverlay(vm: ChessViewModel) {
             )
             Spacer(Modifier.height(10.dp))
             Text(
-                "Your friend opens MWM Chess, picks \"Play a friend online\" and types this code. " +
-                    "You play ${if (vm.humanColor == Color.WHITE) "White" else "Black"}.",
+                when {
+                    waiting ->
+                        "Your friend opens MWM Chess, picks \"Play a friend online\" and types this code. " +
+                            "You play $side."
+                    vm.joinedByCode -> "You are in. You play $side."
+                    else -> "Your friend has joined. You play $side."
+                },
                 fontFamily = Cinzel, fontSize = 12.sp, color = Design.muted, textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(16.dp))
-            CircularProgressIndicator(Modifier.size(26.dp), color = Design.goldLight, strokeWidth = 2.5.dp)
-            Spacer(Modifier.height(16.dp))
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF9A6730), androidx.compose.ui.graphics.Color(0xFF5A3A19))))
-                    .border(1.5.dp, Design.gold, RoundedCornerShape(11.dp))
-                    .clickable {
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(
-                                Intent.EXTRA_TEXT,
-                                "Play chess with me! Open MWM Chess, pick \"Play a friend online\" and enter the code $code",
-                            )
-                        }
-                        context.startActivity(Intent.createChooser(send, "Share game code"))
+            if (waiting) {
+                CircularProgressIndicator(Modifier.size(26.dp), color = Design.goldLight, strokeWidth = 2.5.dp)
+                Spacer(Modifier.height(16.dp))
+                CardButton("SHARE CODE") {
+                    val send = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(
+                            Intent.EXTRA_TEXT,
+                            "Play chess with me! Open MWM Chess, pick \"Play a friend online\" and enter the code $code",
+                        )
                     }
-                    .padding(vertical = 13.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+                    context.startActivity(Intent.createChooser(send, "Share game code"))
+                }
+                Spacer(Modifier.height(10.dp))
+            }
+            CardButton("CONTINUE") { vm.dismissCodeCard() }
+            if (waiting) {
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    "SHARE CODE",
-                    fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 2.sp,
-                    color = Design.creamBright,
+                    "Cancel",
+                    fontFamily = Cinzel, fontSize = 13.sp, color = Design.muted,
+                    modifier = Modifier.clickable { vm.backToMenu() }.padding(6.dp),
                 )
             }
+        }
+    }
+}
+
+/** Asks before leaving a running online game, because leaving gives the friend the win. */
+@Composable
+private fun LeaveDialog(onStay: () -> Unit, onLeave: () -> Unit) {
+    Box(
+        Modifier.fillMaxSize().background(Design.scrim),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier
+                .width(290.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Design.panel)
+                .border(1.5.dp, Design.gold, RoundedCornerShape(18.dp))
+                .padding(horizontal = 22.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                "LEAVE THE GAME?",
+                fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 16.sp, letterSpacing = 2.sp,
+                color = Design.creamBright,
+            )
             Spacer(Modifier.height(10.dp))
             Text(
-                "Cancel",
+                "Your friend wins if you leave now.",
+                fontFamily = Cinzel, fontSize = 12.sp, color = Design.muted, textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(18.dp))
+            CardButton("KEEP PLAYING", onClick = onStay)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Leave to main menu",
                 fontFamily = Cinzel, fontSize = 13.sp, color = Design.muted,
-                modifier = Modifier.clickable { vm.backToMenu() }.padding(6.dp),
+                modifier = Modifier.clickable { onLeave() }.padding(6.dp),
             )
         }
+    }
+}
+
+/** The wide gold button used on the in-game cards. */
+@Composable
+private fun CardButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(11.dp))
+            .background(Brush.verticalGradient(listOf(androidx.compose.ui.graphics.Color(0xFF9A6730), androidx.compose.ui.graphics.Color(0xFF5A3A19))))
+            .border(1.5.dp, Design.gold, RoundedCornerShape(11.dp))
+            .clickable { onClick() }
+            .padding(vertical = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            fontFamily = Cinzel, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = 2.sp,
+            color = Design.creamBright,
+        )
     }
 }
 
